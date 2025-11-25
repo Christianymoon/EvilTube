@@ -1,9 +1,8 @@
-import sys
 from pytubefix import YouTube
-from pytubefix import Stream
 from pytubefix import Playlist
 from tkinter import *
-from PIL import Image, ImageTk
+from tkinter import font
+from PIL import Image
 from tkinter import messagebox
 from tkinter.filedialog import askdirectory, askopenfilename
 import urllib.request
@@ -20,12 +19,10 @@ customtkinter.set_default_color_theme("dark-blue")
 customtkinter.set_appearance_mode("dark")
 
 colors = {
-    'white': '#ffffff',
-    'black': '#000000',
-    'grey': '#333',
-    'hover_red': '#ea3d3d'
+    'background': "#000000",
+    'enfasis': "#A10000",
+    'background2': "#141414"
 }
-background = colors['grey']
 
 
 class Converter(customtkinter.CTk):
@@ -46,21 +43,21 @@ class Converter(customtkinter.CTk):
         self.frame_buttons.pack(side='top', expand=True, fill='both')
 
         self.open_folder_button = customtkinter.CTkButton(
-            self.frame_buttons, text="Select path", width=100, command=self.define_path)  # set command parameter
+            # set command parameter
+            self.frame_buttons, text="Select path", width=100, command=self.define_path)
         self.open_folder_button.pack(side='left', expand=True)
 
         self.open_file = customtkinter.CTkButton(
             self.frame_buttons, text="Select file", width=100, command=self.select_file)
         self.open_file.pack(side='left', expand=True)
 
-
         self.info_frame = customtkinter.CTkFrame(
             self
         )
         self.info_frame.pack(side='top', expand=True, fill='both')
 
-    
-        self.instructions = customtkinter.CTkLabel(self.info_frame, text="1.- Select a option, convert multiple files or one file\n 2.- Select folder or file\n 3.- Select folder destination")
+        self.instructions = customtkinter.CTkLabel(
+            self.info_frame, text="1.- Select a option, convert multiple files or one file\n 2.- Select folder or file\n 3.- Select folder destination")
         self.instructions.pack(side='top', expand=True)
 
         # INSTALL MANAGER
@@ -81,7 +78,6 @@ class Converter(customtkinter.CTk):
         self.progressbar.pack_forget()
         self.progressbar.set(0)
 
-
         # FFMPEG
 
         self.status_ffmpeg = customtkinter.CTkLabel(
@@ -98,7 +94,8 @@ class Converter(customtkinter.CTk):
     def define_path(self):
         self.folder_path = askdirectory(intialdir=None)
         if not self.folder_path:
-            messagebox.showinfo('Evil YouYube - Conversor', "Operation canceled by user")
+            messagebox.showinfo('Evil YouYube - Conversor',
+                                "Operation canceled by user")
             return
         selection = messagebox.askokcancel(
             "Evil YouTube - Conversor", "You want convert all mp4 files to mp3 files for this folder?")
@@ -115,37 +112,41 @@ class Converter(customtkinter.CTk):
         if single_file:
             proc = subprocess.run(
                 ['powershell.exe',
-                '.\convertmp4tomp3.ps1',
-                '-FfmpegPath',
-                self.ffmpeg_path,
-                '-File',
-                f'\'{self.file_path}\'',
-                '-DestinationFolderPath',
-                f'\'{self.folder_destination_path}\'']
+                 '.\convertmp4tomp3.ps1',
+                 '-FfmpegPath',
+                 self.ffmpeg_path,
+                 '-File',
+                 f'\'{self.file_path}\'',
+                 '-DestinationFolderPath',
+                 f'\'{self.folder_destination_path}\'']
             )
 
             if proc.returncode != 0:
-                messagebox.showerror('Error during conversion', 'Error code: 4 script error')
+                messagebox.showerror(
+                    'Error during conversion', 'Error code: 4 script error')
             else:
-                messagebox.showinfo('Files converted successfully', f'files converted sucessfully on {self.folder_destination_path}')
+                messagebox.showinfo('Files converted successfully',
+                                    f'files converted sucessfully on {self.folder_destination_path}')
 
             self.progressbar_ffmpeg.stop()
         else:
             try:
                 proc = subprocess.run(
                     ['powershell.exe',
-                    '.\convertmp4tomp3.ps1',
-                    '-FfmpegPath', 
-                    self.ffmpeg_path, 
-                    '-FolderPath', 
-                    f'\'{self.folder_path}\'', 
-                    '-DestinationFolderPath', 
-                    f'\'{self.folder_destination_path}\''])
-                    
+                     '.\convertmp4tomp3.ps1',
+                     '-FfmpegPath',
+                     self.ffmpeg_path,
+                     '-FolderPath',
+                     f'\'{self.folder_path}\'',
+                     '-DestinationFolderPath',
+                     f'\'{self.folder_destination_path}\''])
+
                 if proc.returncode != 0:
-                    messagebox.showerror('Error during conversion', 'Error code: 3, Script error')
+                    messagebox.showerror(
+                        'Error during conversion', 'Error code: 3, Script error')
                 else:
-                    messagebox.showinfo('Files converted successfully', f'Files converted successfully on {self.folder_destination_path}')
+                    messagebox.showinfo(
+                        'Files converted successfully', f'Files converted successfully on {self.folder_destination_path}')
             except OSError as e:
                 messagebox.showerror('Error during conversion', e)
             finally:
@@ -154,14 +155,15 @@ class Converter(customtkinter.CTk):
     def select_file(self):
         self.file_path = askopenfilename()
         if not self.file_path:
-            messagebox.showinfo('Evil YouTube - Conversor', "Operation canceled by user")
+            messagebox.showinfo('Evil YouTube - Conversor',
+                                "Operation canceled by user")
             return
-        selection = messagebox.askokcancel("Evil YouTube - Conversor", f"You want convert {self.file_path} to mp3?")
+        selection = messagebox.askokcancel(
+            "Evil YouTube - Conversor", f"You want convert {self.file_path} to mp3?")
         if selection:
             self.convert_file_mp4_to_mp3()
         else:
             return
-
 
     def convert_all_mp4_to_mp3(self):
         if self.folder_path is None:
@@ -246,7 +248,8 @@ class Converter(customtkinter.CTk):
 
         if shutil.which(relative_ffmpeg_bin) is not None:
             self.ffmpeg_path = f'\'{os.path.abspath(relative_ffmpeg_bin)}\''
-            t6 = threading.Thread(target=self.execute_ffmpeg, kwargs={'single_file': True})
+            t6 = threading.Thread(target=self.execute_ffmpeg, kwargs={
+                                  'single_file': True})
             t6.start()
         else:
             install_ffmpeg = messagebox.askokcancel(
@@ -256,60 +259,6 @@ class Converter(customtkinter.CTk):
                 t4.start()
             else:
                 return
-        
-
-
-
-# ROOT
-root = Tk()
-root.title("Evil YouTube")
-root.geometry("600x450")
-root.resizable(False, False)
-root.config(background=background)
-root.iconbitmap("./youtube.ico")
-
-label_link = customtkinter.CTkLabel(
-    root, text="YouTube URL", font=("Tahoma", 12))
-label_link.grid(row=1, column=0, pady=0, padx="50")
-
-entry_link = customtkinter.CTkEntry(
-    root, placeholder_text="Set url", width=200, corner_radius=10)
-entry_link.grid(row=1, column=1, pady=0)
-
-# progressbar
-progressbar = customtkinter.CTkProgressBar(
-    root, width=200, orientation="horizontal", mode="determinate", corner_radius=10, progress_color="red")
-progressbar.grid(row=2, column=1)
-progressbar.set(0)
-# output_filepath
-
-selectionplaylist = IntVar()
-selectionplaylist.set(0)
-
-radiobutton_1 = customtkinter.CTkRadioButton(
-    root, text="Video", variable=selectionplaylist, value=0, hover_color=colors['hover_red'], fg_color='red')
-radiobutton_1.grid(row=4, column=0, pady=5, padx=5)
-
-radiobutton_2 = customtkinter.CTkRadioButton(
-    root, text="Playlist", variable=selectionplaylist, value=1, hover_color=colors['hover_red'], fg_color='red')
-radiobutton_2.grid(row=5, column=0, pady=5, padx=5)
-
-selection = IntVar()
-selection.set(1)
-
-radiobutton_3 = customtkinter.CTkRadioButton(
-    root, text="High Quality", variable=selection, value=1, hover_color=colors['hover_red'], fg_color='red')
-radiobutton_3.grid(row=3, column=0, pady=5, padx=5)
-
-radiobutton_4 = customtkinter.CTkRadioButton(
-    root, text="Low Quality", variable=selection, value=2, hover_color=colors['hover_red'], fg_color='red')
-radiobutton_4.grid(row=2, column=0, pady=5, padx=5)
-
-frame2 = customtkinter.CTkFrame(root, fg_color="transparent", width=400)
-
-label_thumbnail = customtkinter.CTkLabel(frame2, fg_color="transparent")
-label_title = customtkinter.CTkLabel(frame2, wraplength=250)
-label_author = customtkinter.CTkLabel(frame2)
 
 
 def open_conversor():
@@ -330,13 +279,9 @@ def new_path():
     filepath = path
     # statusbar["text"] = f"Route established in {filepath}"
 
-# on complete function
-
 
 def on_complete_function(stream, file_path):
     messagebox.showinfo("YouTube Downloader", "Download Completed")
-
-# on progress function
 
 
 def progress_function(s, chunk, bytes_remaining):
@@ -346,19 +291,15 @@ def progress_function(s, chunk, bytes_remaining):
 
 
 def get_thumbnail(video_obj):
-    global photo
     thumbnail = Image.open(urllib.request.urlopen(video_obj.thumbnail_url))
-    photo = ImageTk.PhotoImage(thumbnail.resize((220, 120)))
-    frame2.grid(row=6, column=1)
-    label_thumbnail.configure(image=photo)
-    label_thumbnail.grid(row=6, column=1)
+    container = customtkinter.CTkImage(thumbnail, size=(400, 300))
+    image_label.configure(image=container, text="")
+    image_label.pack(expand=True, fill="both")
 
 
-def set_label(title, author):
-    label_title.configure(text=str(title))
-    label_title.grid(row=1, column=1)
-    label_author.configure(text=str(author))
-    label_author.grid(row=2, column=1, columnspan=3)
+def set_label(video_obj):
+    description_label.configure(text=str(video_obj.title) + "\n" + str(video_obj.author) + "\n" + str(video_obj.views) + " visitas")
+    description_label.pack(expand=True, fill="x")
 
 
 def get_video_object(url="", playlist=False):
@@ -371,11 +312,10 @@ def get_video_object(url="", playlist=False):
     except:
         messagebox.showerror(
             "Find error", f"Url: {url} not is a valid youtube url, please set a valid url or check a new app update")
-        return None
+        return 
     get_thumbnail(video)
-    title = video.title # WARNING 4/11/2024 THIS METHOD GET A EXCEPTION pytube.exceptions.PytubeError
-    author = video.author
-    set_label(title, author)
+    # WARNING 4/11/2024 THIS METHOD GET A EXCEPTION pytube.exceptions.PytubeError
+    set_label(video)
     filtracion = video.streams.filter(progressive=True,
                                       file_extension="mp4").order_by("resolution").desc()
     return filtracion
@@ -443,21 +383,6 @@ def download_menu():
         t3.start()
 
 
-button_download = customtkinter.CTkButton(
-    root, text="Download", command=download_menu, hover_color=colors['hover_red'], fg_color='red')
-# boton_download = Button(root, text="Download",fg="red", bg="black", command=download_menu, font=("Segoe UI", 12), border=0)
-button_download.grid(row=1, column=2, pady=20, padx=20)
-
-button_preview = customtkinter.CTkButton(
-    root, text="Preview", command=preview, hover_color=colors['hover_red'], fg_color='red')
-button_preview.grid(row=2, column=2)
-
-# boton_download = Button(root, text="Preview",fg="red", bg="black", command=preview, font=("Segoe UI", 12), border=0)
-# boton_download.grid(row = 2, column = 2, pady= 20, padx=20)
-
-# Window emergent
-
-
 def error_downloading():
     messagebox.showerror("YouTube Downloader", "Downloading Error")
 
@@ -472,6 +397,92 @@ def close_app():
 def about_menu():
     message_about = messagebox.showinfo(
         "About", "Support on ChrisVergara7@outlook.com")
+
+
+# ROOT
+root = Tk()
+root.title("EvilTube")
+root.geometry("800x650")
+root.resizable(True, True)
+root.config(background=colors["background"])
+root.iconbitmap("./assets/youtube.ico")
+
+# default_font = font.nametofont("TkDefaultFont")
+# default_font.configure(family="Arial", size=14)  # Change font family & size
+
+main_panel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background2"])
+main_panel.pack(fill="x", side="top", padx=30, pady=15)
+
+label_link = customtkinter.CTkLabel(main_panel, text="", image=customtkinter.CTkImage(Image.open("./assets/youtube_logo.png"), size=(50, 50)), fg_color=colors["background2"])
+label_link.pack(side="left", padx=10, pady=10)
+
+entry_link = customtkinter.CTkEntry(
+    main_panel, placeholder_text="Enlace de Youtube", corner_radius=15, width=300, height=50, text_color=colors["enfasis"])
+entry_link.pack(expand=True, fill="x", padx=15, pady=15)
+
+progressbar = customtkinter.CTkProgressBar(
+    root, width=350, height=15, orientation="horizontal", mode="determinate", corner_radius=10, progress_color=colors["enfasis"])
+progressbar.pack(fill="x", padx=30, pady=10)
+progressbar.set(0)
+
+
+
+selectionplaylist = IntVar()
+selectionplaylist.set(0)
+
+parent_paneel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background"])
+parent_paneel.pack(padx=15, pady=10, fill="x")
+
+url_type_panel = customtkinter.CTkFrame(parent_paneel, corner_radius=20, fg_color=colors["background2"])
+url_type_panel.pack(padx=15, pady=10, side="left", expand=True, fill="x")
+
+url_quality_panel = customtkinter.CTkFrame(parent_paneel, corner_radius=20, fg_color=colors["background2"])
+url_quality_panel.pack(padx=15, pady=10, side="right", expand=True, fill="x")
+
+radiobutton_1 = customtkinter.CTkRadioButton(
+    url_type_panel, text="Video", variable=selectionplaylist, value=0, fg_color=colors["enfasis"])
+radiobutton_1.pack(padx=10, pady=10)
+
+radiobutton_2 = customtkinter.CTkRadioButton(
+    url_type_panel, text="Playlist", variable=selectionplaylist, value=1, fg_color=colors["enfasis"])
+radiobutton_2.pack(padx=10, pady=10)
+
+selection = IntVar()
+selection.set(1)
+
+radiobutton_3 = customtkinter.CTkRadioButton(
+    url_quality_panel, text="Alta Calidad", variable=selection, value=1, fg_color=colors["enfasis"])
+radiobutton_3.pack(padx=10, pady=10)
+
+radiobutton_4 = customtkinter.CTkRadioButton(
+    url_quality_panel, text="Baja Calidad", variable=selection, value=2, fg_color=colors["enfasis"])
+radiobutton_4.pack(padx=10, pady=10)
+
+button_panel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background"])
+button_panel.pack(fill="x", padx=15, pady=10)
+
+button_download = customtkinter.CTkButton(
+    button_panel, text="Descargar", command=download_menu, fg_color=colors["enfasis"])
+button_download.pack(side="left", padx=15)
+button_preview = customtkinter.CTkButton(
+    button_panel, text="Visualizar", command=preview, fg_color=colors["enfasis"])
+button_preview.pack(side="right", padx=15)
+
+
+
+thumbnail_frame = customtkinter.CTkFrame(root, fg_color=colors["background"], corner_radius=15)
+thumbnail_frame.pack(expand=True, fill="x", padx=30, pady=10)
+
+image_frame = customtkinter.CTkFrame(thumbnail_frame, fg_color=colors["background"])
+image_frame.pack(side="left", fill="x")
+
+description_frame = customtkinter.CTkFrame(thumbnail_frame, fg_color=colors["background"])
+description_frame.pack(side="right", fill="x")
+
+image_label = customtkinter.CTkLabel(image_frame)
+description_label = customtkinter.CTkLabel(description_frame)
+
+
 
 
 # barra menus
