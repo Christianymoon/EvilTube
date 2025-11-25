@@ -1,7 +1,6 @@
 from pytubefix import YouTube
 from pytubefix import Playlist
 from tkinter import *
-from tkinter import font
 from PIL import Image
 from tkinter import messagebox
 from tkinter.filedialog import askdirectory, askopenfilename
@@ -15,6 +14,14 @@ import shutil
 import requests
 import zipfile
 
+# Source - https://stackoverflow.com/a
+# Posted by Noelkd, modified by community. See post 'Timeline' for change history
+# Retrieved 2025-11-25, License - CC BY-SA 4.0
+# Mac Os issue SSL Certificate
+
+# import ssl
+# ssl._create_default_https_context = ssl._create_unverified_context
+
 customtkinter.set_default_color_theme("dark-blue")
 customtkinter.set_appearance_mode("dark")
 
@@ -24,7 +31,6 @@ colors = {
     'background2': "#141414"
 }
 
-
 class Converter(customtkinter.CTk):
     def __init__(self):
         super().__init__()
@@ -33,7 +39,7 @@ class Converter(customtkinter.CTk):
         self.file_path = None
         self.ffmpeg_path = None
 
-        self.title("Evil YouTube - Conversor")
+        self.title("Evil YouTube - Conversor") 
         self.geometry("300x400")
         self.resizable(False, False)
 
@@ -260,11 +266,9 @@ class Converter(customtkinter.CTk):
             else:
                 return
 
-
 def open_conversor():
     app = Converter()
     app.mainloop()
-
 
 def update_progress(percentage):
     if percentage < 1:
@@ -272,35 +276,30 @@ def update_progress(percentage):
     else:
         progressbar.set(1)
 
-
 def new_path():
     global filepath
     path = askdirectory(initialdir="./")
     filepath = path
     # statusbar["text"] = f"Route established in {filepath}"
 
-
 def on_complete_function(stream, file_path):
     messagebox.showinfo("YouTube Downloader", "Download Completed")
-
 
 def progress_function(s, chunk, bytes_remaining):
     percentage_complete = int(
         (s.filesize - bytes_remaining) / s.filesize * 100) * .01
     progressbar.set(percentage_complete)
 
-
 def get_thumbnail(video_obj):
-    thumbnail = Image.open(urllib.request.urlopen(video_obj.thumbnail_url))
+    response = urllib.request.urlopen(video_obj.thumbnail_url)
+    thumbnail = Image.open(response)
     container = customtkinter.CTkImage(thumbnail, size=(400, 300))
     image_label.configure(image=container, text="")
     image_label.pack(expand=True, fill="both")
 
-
 def set_label(video_obj):
     description_label.configure(text=str(video_obj.title) + "\n" + str(video_obj.author) + "\n" + str(video_obj.views) + " visitas")
     description_label.pack(expand=True, fill="x")
-
 
 def get_video_object(url="", playlist=False):
     try:
@@ -320,7 +319,6 @@ def get_video_object(url="", playlist=False):
                                       file_extension="mp4").order_by("resolution").desc()
     return filtracion
 
-
 def download(filtracion, filepath=""):
     if filtracion == None:
         return
@@ -332,7 +330,6 @@ def download(filtracion, filepath=""):
         video.download(output_path=filepath)
     except ConnectionError:
         messagebox.showerror("Network Error", "Internet connection lost")
-
 
 def download_playlist():
     video_list = entry_link.get()
@@ -358,7 +355,6 @@ def download_playlist():
         messagebox.showerror(
             "Playlist error", f"Playlist: {video_list} not is a valid YouTube playlist, please set a valid YouTube playlist or check a new app update")
 
-
 def button_download_video():
     url = entry_link.get()
     filepath = askdirectory(initialdir=None)
@@ -368,11 +364,9 @@ def button_download_video():
     else:
         messagebox.showerror("Error", "No path established")
 
-
 def preview():
     url = entry_link.get()
     get_video_object(url)
-
 
 def download_menu():
     if selectionplaylist.get() == 0:
@@ -382,10 +376,8 @@ def download_menu():
         t3 = threading.Thread(target=download_playlist)
         t3.start()
 
-
 def error_downloading():
     messagebox.showerror("YouTube Downloader", "Downloading Error")
-
 
 def close_app():
     message_close = messagebox.askokcancel(
@@ -393,11 +385,9 @@ def close_app():
     if message_close == True:
         root.destroy()
 
-
 def about_menu():
     message_about = messagebox.showinfo(
         "About", "Support on ChrisVergara7@outlook.com")
-
 
 # ROOT
 root = Tk()
@@ -406,9 +396,6 @@ root.geometry("800x650")
 root.resizable(True, True)
 root.config(background=colors["background"])
 root.iconbitmap("./assets/youtube.ico")
-
-# default_font = font.nametofont("TkDefaultFont")
-# default_font.configure(family="Arial", size=14)  # Change font family & size
 
 main_panel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background2"])
 main_panel.pack(fill="x", side="top", padx=30, pady=15)
