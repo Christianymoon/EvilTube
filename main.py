@@ -1,3 +1,4 @@
+import glob
 from pytubefix import YouTube
 from pytubefix import Playlist
 from tkinter import *
@@ -6,6 +7,7 @@ from tkinter import messagebox
 from tkinter.filedialog import askdirectory, askopenfilename
 import urllib.request
 import threading
+from concurrent.futures import ThreadPoolExecutor, wait
 
 import os
 import customtkinter
@@ -25,192 +27,129 @@ import zipfile
 customtkinter.set_default_color_theme("dark-blue")
 customtkinter.set_appearance_mode("dark")
 
+stop_event = threading.Event()
+converter_stop_event = threading.Event()
+
 colors = {
     'background': "#000000",
     'enfasis': "#A10000",
     'background2': "#141414"
 }
 
-class Converter(customtkinter.CTk):
-    def __init__(self):
+child_windows = []
+
+class Converter(customtkinter.CTkToplevel):
+    def __init__(self, root):
         super().__init__()
+        self.root = root
+        self.transient(root)
+        self.grab_set()
+        child_windows.append(self)
         self.folder_path = None
-        self.folder_destination_path = None
+        self.dest_dir = None
         self.file_path = None
         self.ffmpeg_path = None
+        self.iconbitmap("./assets/youtube.ico")
+        self.protocol("WM_DELETE_WINDOW", lambda: self.close_window(self))
 
         self.title("Evil YouTube - Conversor") 
         self.geometry("300x400")
         self.resizable(False, False)
+        self.config(background=colors["background"])
 
         self.frame_buttons = customtkinter.CTkFrame(
-            self
+            self, fg_color=colors["background2"], bg_color=colors["background"], corner_radius=15
         )
-        self.frame_buttons.pack(side='top', expand=True, fill='both')
+        self.frame_buttons.pack(side='top', expand=True, fill='both', pady=15, padx=15)
 
         self.open_folder_button = customtkinter.CTkButton(
             # set command parameter
-            self.frame_buttons, text="Select path", width=100, command=self.define_path)
+            self.frame_buttons, text="Convertir Ruta", width=100, command=lambda: self.handle_conversor("Path"), fg_color=colors["enfasis"])
         self.open_folder_button.pack(side='left', expand=True)
 
         self.open_file = customtkinter.CTkButton(
-            self.frame_buttons, text="Select file", width=100, command=self.select_file)
+            self.frame_buttons, text="Convertir Archivo", width=100, command=lambda: self.handle_conversor("File"), fg_color=colors["enfasis"], )
         self.open_file.pack(side='left', expand=True)
 
         self.info_frame = customtkinter.CTkFrame(
-            self
+            self, fg_color=colors["background2"], bg_color=colors["background"], corner_radius=15
         )
-        self.info_frame.pack(side='top', expand=True, fill='both')
+        self.info_frame.pack(side='bottom', expand=True, fill='both', pady=15, padx=15)
 
         self.instructions = customtkinter.CTkLabel(
-            self.info_frame, text="1.- Select a option, convert multiple files or one file\n 2.- Select folder or file\n 3.- Select folder destination")
-        self.instructions.pack(side='top', expand=True)
+            self.info_frame, wraplength=200, text="1.- Selecciona ruta para convertir todos los archivos mp4 de una ruta a mp3, selecciona archivo si solo quieres convertir un archivo \n 2.- Selecciona la Ruta o el archivo mp4\n 3.- Selecciona la ruta de destino", text_color=colors["enfasis"])
+        self.instructions.pack(side='top', expand=True, fill="x")
 
         # INSTALL MANAGER
 
-        self.install_manager_frame = customtkinter.CTkFrame(
-            self
-        )
-        self.install_manager_frame.pack_forget()
-
         self.status_label = customtkinter.CTkLabel(
-            self.install_manager_frame, text=""
-        )
-
+            self.info_frame, text="")
         self.status_label.pack_forget()
 
         self.progressbar = customtkinter.CTkProgressBar(
-            self.install_manager_frame, orientation="horizontal", progress_color='red', corner_radius=10, mode='indeterminate')
+            self.info_frame, orientation="horizontal", progress_color=colors["enfasis"], corner_radius=10, mode='indeterminate')
         self.progressbar.pack_forget()
-        self.progressbar.set(0)
 
         # FFMPEG
 
         self.status_ffmpeg = customtkinter.CTkLabel(
-            self.info_frame, text=""
-        )
+            self.info_frame, text="")
         self.status_ffmpeg.pack_forget()
 
         self.progressbar_ffmpeg = customtkinter.CTkProgressBar(
-            self.info_frame, orientation="horizontal", progress_color='red', corner_radius=10, mode='indeterminate'
-        )
-
+            self.info_frame, orientation="horizontal", progress_color=colors["enfasis"], corner_radius=10, mode='indeterminate')
         self.progressbar.pack_forget()
 
-    def define_path(self):
+    def close_window(self, _instance):
+        converter_stop_event.set()
+        if _instance in child_windows:
+            print(f"instance obj {_instance} will be deleted")
+            child_windows.remove(_instance)
+        _instance.destroy()    
+
+    def pick_dir(self):
         self.folder_path = askdirectory(intialdir=None)
         if not self.folder_path:
-            messagebox.showinfo('Evil YouYube - Conversor',
-                                "Operation canceled by user")
-            return
-        selection = messagebox.askokcancel(
-            "Evil YouTube - Conversor", "You want convert all mp4 files to mp3 files for this folder?")
-        if selection:
-            self.convert_all_mp4_to_mp3()
-        else:
-            return
-
-    def execute_ffmpeg(self, single_file=False):
-        self.progressbar_ffmpeg.pack()
-        self.progressbar_ffmpeg.start()
-        self.status_ffmpeg.configure(text="Converting")
-        self.status_ffmpeg.pack()
-        if single_file:
-            proc = subprocess.run(
-                ['powershell.exe',
-                 '.\convertmp4tomp3.ps1',
-                 '-FfmpegPath',
-                 self.ffmpeg_path,
-                 '-File',
-                 f'\'{self.file_path}\'',
-                 '-DestinationFolderPath',
-                 f'\'{self.folder_destination_path}\'']
-            )
-
-            if proc.returncode != 0:
-                messagebox.showerror(
-                    'Error during conversion', 'Error code: 4 script error')
-            else:
-                messagebox.showinfo('Files converted successfully',
-                                    f'files converted sucessfully on {self.folder_destination_path}')
-
-            self.progressbar_ffmpeg.stop()
-        else:
-            try:
-                proc = subprocess.run(
-                    ['powershell.exe',
-                     '.\convertmp4tomp3.ps1',
-                     '-FfmpegPath',
-                     self.ffmpeg_path,
-                     '-FolderPath',
-                     f'\'{self.folder_path}\'',
-                     '-DestinationFolderPath',
-                     f'\'{self.folder_destination_path}\''])
-
-                if proc.returncode != 0:
-                    messagebox.showerror(
-                        'Error during conversion', 'Error code: 3, Script error')
-                else:
-                    messagebox.showinfo(
-                        'Files converted successfully', f'Files converted successfully on {self.folder_destination_path}')
-            except OSError as e:
-                messagebox.showerror('Error during conversion', e)
-            finally:
-                self.progressbar_ffmpeg.stop()
-
-    def select_file(self):
+            messagebox.showinfo('Error', "Operation canceled by user")
+            return None 
+        return self.folder_path
+    
+    def pick_file(self):
         self.file_path = askopenfilename()
         if not self.file_path:
-            messagebox.showinfo('Evil YouTube - Conversor',
-                                "Operation canceled by user")
-            return
-        selection = messagebox.askokcancel(
-            "Evil YouTube - Conversor", f"You want convert {self.file_path} to mp3?")
-        if selection:
-            self.convert_file_mp4_to_mp3()
-        else:
-            return
-
-    def convert_all_mp4_to_mp3(self):
-        if self.folder_path is None:
-            return
-
-        self.folder_destination_path = askdirectory(initialdir=None)
-
-        # Use ffmpeg
-        # Check if ffmpeg exists on the system
-
-        relative_ffmpeg_bin = 'ffmpeg-master-latest-win64-gpl\\bin\\ffmpeg.exe'
-
-        if shutil.which(relative_ffmpeg_bin) is not None:
-            self.ffmpeg_path = f'\'{os.path.abspath(relative_ffmpeg_bin)}\''
-
-            # if shutil.which('ffmpeg.exe') is not None:
-            #     self.ffmpeg_path = shutil.which('ffmpeg.exe')
-            # Execute powershell script
-
-            t5 = threading.Thread(target=self.execute_ffmpeg)
-            t5.start()
-
-        else:
-            install_ffmpeg = messagebox.askokcancel(
-                "Evil YouTube - Conversor", "Not ffmpeg exist in your system do you want install ffmpeg?")
-            if install_ffmpeg:
-                t4 = threading.Thread(target=self.install_ffmpeg)
-                t4.start()
-            else:
-                return
+            messagebox.showinfo('Error', "Operation canceled by user")
+            return None
+        return self.file_path
+    
+    def pick_dest_dir(self):
+        self.dest_dir = askdirectory(initialdir=None)
+        if not self.dest_dir:
+            messagebox.showinfo('Error', 'Operation canceled by user')
+            return None
+        return self.dest_dir
+    
+    def verify_ffmpeg(self):
+        ffmpeg_local_bin = 'ffmpeg-master-latest-win64-gpl\\bin\\ffmpeg.exe'
+        if shutil.which(ffmpeg_local_bin) is not None: # Exist 
+            self.ffmpeg_path = os.path.abspath(ffmpeg_local_bin)
+            return True
+        return False
+    
+    def install_ffmpeg_thread(self):
+        t1 = threading.Thread(target=self.install_ffmpeg, daemon=True)
+        t1.start()
 
     def install_ffmpeg(self):
+        repository = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
-        self.install_manager_frame.pack(side='top', fill="both", expand=True)
-        self.progressbar.pack()
-        self.status_label.pack()
+        # Handle UI envents
+        self.progressbar_ffmpeg.forget()
+        self.status_ffmpeg.forget()
+        self.status_label.pack(side="top", fill="x", padx=15, pady=15)
+        self.progressbar.pack(side="bottom", fill="x", padx=15, pady=15)
 
         default_filename = "ffmpeg.zip"
-        git = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-
-        response = requests.get(git, stream=True)
+        response = requests.get(repository, stream=True)
 
         if response.status_code == 200:
             total_size = int(response.headers.get('content-length', None))
@@ -222,7 +161,7 @@ class Converter(customtkinter.CTk):
                 self.progressbar.start()
 
             self.status_label.configure(
-                text="Downloading ffmpeg please wait...")
+                text="Descargando FFMPEG porfavor espere...")
             with open(default_filename, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=chunk_size):
                     file.write(chunk)
@@ -233,42 +172,135 @@ class Converter(customtkinter.CTk):
 
             # Once installed unzip ffmpeg on the same directory
             self.status_label.configure(
-                text="Unziping ffmpeg on current directory")
+                text="Descomprimiendo FFMPEG...")
             with zipfile.ZipFile('ffmpeg.zip', 'r') as zip_ref:
                 zip_ref.extractall(os.path.dirname('ffmpeg.zip'))
 
-            messagebox.showinfo("ffmpeg installed",
-                                "ffmpeg has been installed successfully")
-            self.progressbar.stop()
-        else:
-            messagebox.showerror("Failed ffmpeg download",
-                                 "ffmpeg can not be installed")
-            self.progressbar.stop()
-
-    def convert_file_mp4_to_mp3(self):
-        if self.file_path is None:
-            return
-
-        self.folder_destination_path = askdirectory(initaldir=None)
-        relative_ffmpeg_bin = 'ffmpeg-master-latest-win64-gpl\\bin\\ffmpeg.exe'
-
-        if shutil.which(relative_ffmpeg_bin) is not None:
-            self.ffmpeg_path = f'\'{os.path.abspath(relative_ffmpeg_bin)}\''
-            t6 = threading.Thread(target=self.execute_ffmpeg, kwargs={
-                                  'single_file': True})
-            t6.start()
-        else:
-            install_ffmpeg = messagebox.askokcancel(
-                "Evil YouTube - Conversor", "Not ffmpeg exist in your system do you want install ffmpeg?")
-            if install_ffmpeg:
-                t4 = threading.Thread(target=self.install_ffmpeg)
-                t4.start()
+            self.status_label.configure(text="Eliminando archivo zip...")
+            os.remove("ffmpeg.zip")
+            self.status_label.configure(text="Completado")
+            if self.verify_ffmpeg():
+                messagebox.showinfo("FFMPEG Instalado", "FFMPEG se ha instalado correctamente")
             else:
-                return
+                messagebox.showinfo("FFMPEG", "Ocurrio un error en la lectura del archivo")
+
+            self.progressbar.stop()
+        else:
+            messagebox.showerror("Error", f"Ocurrio un error al descargar FFMPEG, codigo http: {response.status_code}")
+            self.progressbar.stop()
+
+
+    def handle_conversor(self, transcode_type):
+        if not self.verify_ffmpeg():
+            self.install_ffmpeg_thread()
+            return
+        
+        
+        self.progressbar.forget()
+        self.status_label.forget()
+
+        
+        self.status_ffmpeg.configure(text="Convirtiendo")
+        
+
+        if transcode_type == "File":
+            try:
+                mp4_file = self.pick_file()
+                if not mp4_file:
+                    return
+                dest_dir = self.pick_dest_dir()
+                if mp4_file and dest_dir:
+                    self.instructions.forget()
+                    self.status_ffmpeg.pack(side="bottom", fill="x", pady=15, padx=15)
+                    self.progressbar_ffmpeg.pack(side="top", fill="x", pady=15, padx=15)
+                    self.progressbar_ffmpeg.start()
+                    filename = os.path.splitext(os.path.basename(mp4_file))[0]
+                    output_file = os.path.join(dest_dir, f"{filename}.mp3")
+                    cmd = [
+                        self.ffmpeg_path,
+                        "-y",
+                        "-i", str(mp4_file),
+                        "-vn",
+                        "-acodec", "libmp3lame",
+                        "-ar", "44100",
+                        "-ab", "128k",
+                        "-f", "mp3",
+                        str(output_file)
+                    ]
+                    self.run_ffmpeg(cmd)
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error mientras se ejecutaba ffmpeg: {e}")
+
+                
+        elif transcode_type == "Path":
+
+            target_dir = self.pick_dir()
+            dest_dir = self.pick_dest_dir()
+            if target_dir and dest_dir:
+                self.instructions.forget()
+                self.status_ffmpeg.pack(side="bottom", fill="x", pady=15, padx=15)
+                self.progressbar_ffmpeg.pack(side="top", fill="x", pady=15, padx=15)
+                self.progressbar_ffmpeg.start()
+
+                mp4_list = glob.glob(target_dir + "/*.mp4")
+                t1 = threading.Thread(target=self.transcode_all, args=(mp4_list, )).start()
+                
+
+    def transcode_all(self, mp4_list):
+        def worker(mp4_file):
+            filename = os.path.splitext(os.path.basename(mp4_file))[0]
+            output_file = os.path.join(self.dest_dir, f"{filename}.mp3")
+            cmd = [
+                self.ffmpeg_path,
+                "-y",
+                "-i", str(mp4_file),
+                "-vn",
+                "-acodec", "libmp3lame",
+                "-ar", "44100",
+                "-ab", "128k",
+                "-f", "mp3",
+                str(output_file)
+            ]
+
+            self.run_ffmpeg(cmd, msg=False, use_thread=False)
+        
+        with ThreadPoolExecutor(max_workers=200) as executor:
+            futures = [executor.submit(worker, mp4_file) for mp4_file in mp4_list]
+            wait(futures)
+
+
+        self.progressbar_ffmpeg.stop()
+        messagebox.showinfo("Info", "Archivos transcodificados con exito")
+        
+
+    def run_ffmpeg(self, cmd, msg=True, use_thread=True):
+
+        def worker():
+            self.current_process = subprocess.Popen(
+                cmd,
+            )
+            status = self.current_process.wait()
+            
+
+            if msg:
+                if status != 0:
+                        messagebox.showerror("Error", "Error del Script ffmpeg")
+
+                if status == 0:
+                    self.progressbar_ffmpeg.stop()
+                    messagebox.showinfo("Info", "Archivo convertido con exito")
+
+
+        if use_thread:
+            t1 = threading.Thread(target=worker, daemon=True).start()
+        else:
+            worker()
+
+
 
 def open_conversor():
-    app = Converter()
-    app.mainloop()
+    app = Converter(root)
 
 def update_progress(percentage):
     if percentage < 1:
@@ -308,12 +340,13 @@ def get_video_object(url="", playlist=False):
             video.register_on_complete_callback(on_complete_function)
         else:
             video = YouTube(url)
-    except:
+    except Exception as e:
         messagebox.showerror(
-            "Find error", f"Url: {url} not is a valid youtube url, please set a valid url or check a new app update")
+            "Find error", f"Url: {url} not is a valid youtube url, please set a valid url or check a new app update: {e}")
         return 
     get_thumbnail(video)
-    # WARNING 4/11/2024 THIS METHOD GET A EXCEPTION pytube.exceptions.PytubeError
+    # 4/11/2024 THIS METHOD GET A EXCEPTION pytube.exceptions.PytubeError
+    # 25/11/2025 use pytubefix instead
     set_label(video)
     filtracion = video.streams.filter(progressive=True,
                                       file_extension="mp4").order_by("resolution").desc()
@@ -328,8 +361,8 @@ def download(filtracion, filepath=""):
         video = filtracion.first()  # first // high quality
     try:
         video.download(output_path=filepath)
-    except ConnectionError:
-        messagebox.showerror("Network Error", "Internet connection lost")
+    except Exception as e:
+        messagebox.showerror("Network Error", f"{e}")
 
 def download_playlist():
     video_list = entry_link.get()
@@ -337,23 +370,24 @@ def download_playlist():
     filepath = askdirectory(initialdir=None)
     quantityes = 0
 
-    try:
-        if filepath != "":
-            for url in playlist.video_urls:
-
+    if filepath != "":
+        for url in playlist.video_urls:
+            if stop_event.is_set():
+                break
+            try:
                 video = get_video_object(url, playlist=True)
                 download(video, filepath=filepath)
                 quantityes += 1
-                # Use percentage if use a different progressbar
-                # total_percentage = ((quantityes / len(playlist.video_urls)) * 100)
-
                 step = quantityes / len(playlist.video_urls)
                 progressbar.set(step)
-        else:
-            messagebox.showerror("Error", "No path established")
-    except:
-        messagebox.showerror(
-            "Playlist error", f"Playlist: {video_list} not is a valid YouTube playlist, please set a valid YouTube playlist or check a new app update")
+            except Exception as e:
+                res = messagebox.askokcancel("Error", "El video no puede ser descargado por restriccion de edad ¿deseas omitirlo y continuar?")
+                if not res:
+                    return 
+                continue
+                
+    else:
+        messagebox.showerror("Error", "No se establecio ruta de descarga")
 
 def button_download_video():
     url = entry_link.get()
@@ -370,10 +404,10 @@ def preview():
 
 def download_menu():
     if selectionplaylist.get() == 0:
-        t2 = threading.Thread(target=button_download_video)
+        t2 = threading.Thread(target=button_download_video, daemon=True)
         t2.start()
     if selectionplaylist.get() == 1:
-        t3 = threading.Thread(target=download_playlist)
+        t3 = threading.Thread(target=download_playlist, daemon=True)
         t3.start()
 
 def error_downloading():
@@ -383,6 +417,7 @@ def close_app():
     message_close = messagebox.askokcancel(
         "YouTube Downloader", "Closing YouTube Downloader")
     if message_close == True:
+        stop_event.set()
         root.destroy()
 
 def about_menu():
@@ -390,21 +425,21 @@ def about_menu():
         "About", "Support on ChrisVergara7@outlook.com")
 
 # ROOT
-root = Tk()
+root = customtkinter.CTk()
 root.title("EvilTube")
 root.geometry("800x650")
 root.resizable(True, True)
 root.config(background=colors["background"])
 root.iconbitmap("./assets/youtube.ico")
 
-main_panel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background2"])
+main_panel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background2"], bg_color=colors["background"])
 main_panel.pack(fill="x", side="top", padx=30, pady=15)
 
 label_link = customtkinter.CTkLabel(main_panel, text="", image=customtkinter.CTkImage(Image.open("./assets/youtube_logo.png"), size=(50, 50)), fg_color=colors["background2"])
 label_link.pack(side="left", padx=10, pady=10)
 
 entry_link = customtkinter.CTkEntry(
-    main_panel, placeholder_text="Enlace de Youtube", corner_radius=15, width=300, height=50, text_color=colors["enfasis"])
+    main_panel, placeholder_text="Enlace de Youtube", corner_radius=15, width=300, height=50, text_color=colors["enfasis"], fg_color=colors["background2"])
 entry_link.pack(expand=True, fill="x", padx=15, pady=15)
 
 progressbar = customtkinter.CTkProgressBar(
@@ -417,7 +452,7 @@ progressbar.set(0)
 selectionplaylist = IntVar()
 selectionplaylist.set(0)
 
-parent_paneel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background"])
+parent_paneel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background"], bg_color=colors["background"])
 parent_paneel.pack(padx=15, pady=10, fill="x")
 
 url_type_panel = customtkinter.CTkFrame(parent_paneel, corner_radius=20, fg_color=colors["background2"])
@@ -445,7 +480,7 @@ radiobutton_4 = customtkinter.CTkRadioButton(
     url_quality_panel, text="Baja Calidad", variable=selection, value=2, fg_color=colors["enfasis"])
 radiobutton_4.pack(padx=10, pady=10)
 
-button_panel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background"])
+button_panel = customtkinter.CTkFrame(root, corner_radius=15, fg_color=colors["background"], bg_color=colors["background"])
 button_panel.pack(fill="x", padx=15, pady=10)
 
 button_download = customtkinter.CTkButton(
@@ -496,4 +531,5 @@ ToolsMenu.add_command(label="Mp4 to mp3 tool", command=open_conversor)
 
 
 if __name__ == "__main__":
+    root.protocol("WM_DELETE_WINDOW", close_app)
     root.mainloop()
